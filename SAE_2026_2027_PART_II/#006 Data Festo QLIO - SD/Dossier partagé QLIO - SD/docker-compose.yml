@@ -1,0 +1,42 @@
+# SAÉ TeleFan — copie locale de la base MES4 (MES Festo)
+# Lancement : docker compose up -d   puis   http://localhost:8080
+# La base se charge toute seule au PREMIER démarrage (aucun import à faire).
+# Repartir de zéro : docker compose down -v   puis   docker compose up -d
+
+services:
+  mariadb:
+    image: mariadb:11.4            # version LTS figée (le dump vient d'un MariaDB 10.6)
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: example_root_password
+      MARIADB_DATABASE: MES4
+      MARIADB_USER: example_user
+      MARIADB_PASSWORD: example_password
+    ports:
+      - "127.0.0.1:3306:3306"      # accessible depuis ce poste uniquement (Python, R, DBeaver…)
+    volumes:
+      - mes4_data:/var/lib/mysql
+      - ./MES4-2026-09-21.sql:/docker-entrypoint-initdb.d/MES4-2026-09-21.sql:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  phpmyadmin:
+    image: phpmyadmin:5.2
+    restart: unless-stopped
+    environment:
+      PMA_HOST: mariadb
+      PMA_USER: example_user
+      PMA_PASSWORD: example_password
+      UPLOAD_LIMIT: 64M            # pour réimporter un dump plus gros que 2 Mo
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      mariadb:
+        condition: service_healthy
+
+volumes:
+  mes4_data:
